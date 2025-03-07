@@ -1,0 +1,30 @@
+# 应用服务 WEB 访问端口
+server:
+  port: 8081
+  max-http-header-size: 65536
+
+deepseek:
+  api-key: sk-7d13f61afd7b473887f1a307eea599c0
+  model: deepseek-reasoner
+  base-url: https://api.deepseek.com # 可选：默认为官方 API 地址
+  log-requests: true # 可选：是否记录请求日志
+  log-responses: true # 可选：是否记录响应日志
+  log-level: INFO
+spring:
+  mvc:
+    async:
+      request-timeout: 9999999999
+  datasource:
+    url: jdbc:h2:./db/mydb  # 数据库
+    driver-class-name: org.h2.Driver
+    username: root
+    password: test
+  h2:
+    console:
+      path: /h2-console  #h2嵌入式数据库控制台，可以通过浏览器访问
+      enabled: true
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl # 开启sql日志
+    map-underscore-to-case: false # 开启驼峰映射(mp默认开启)

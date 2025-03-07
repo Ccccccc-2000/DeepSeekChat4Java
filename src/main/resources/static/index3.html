@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>deepseek</title>
+    <style>
+
+        /* 全局重置 */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            /*padding: 1px;*/
+        }
+
+        body {
+            background-color: #f0f0f0;
+            position: relative;
+            min-height: 100vh;
+        }
+
+        /* 聊天容器 */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            height: calc(100vh - 50px);
+            overflow-y: auto;
+            padding-bottom: 80px;
+        }
+
+        /* 消息样式 */
+        .user-message {
+            align-self: flex-end;
+            background: #007bff;
+            color: white;
+            max-width: 70%;
+            padding: 12px;
+            border-radius: 15px 15px 0 15px;
+            word-wrap: break-word;
+        }
+
+        .bot-message {
+            align-self: flex-start;
+            background: #9ea0a9;
+            max-width: 70%;
+            padding: 12px;
+            border-radius: 15px 15px 15px 0;
+            word-wrap: break-word;
+        }
+
+        .bot-Tmessage {
+            align-self: flex-start;
+            background: #ffffff;
+            max-width: 60%;
+            padding: 10px;
+            border-radius: 15px 15px 15px 0;
+            word-wrap: break-word;
+        }
+
+        .thinking {
+            font-style: italic;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+
+        #loading {
+            display: none;
+            color: #6c757d;
+            padding: 10px;
+        }
+
+        /* 输入框容器 */
+        .input-container {
+            position: fixed;
+            bottom: 0;
+            left: 250px;
+            right: 0;
+            background: #f0f0f0;
+            padding: 15px;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+            z-index: 999;
+            display: flex;
+            gap: 10px;
+            transition: left 0.3s;
+        }
+
+
+        #input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 2px solid #007bff;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        /* 主内容区 */
+        .main-content {
+            margin-left: -23px;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+
+        /* 侧边栏 */
+        .sidebar {
+            width: 250px;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            background: #2c3e50;
+            overflow-y: auto;
+            padding: 20px;
+            color: white;
+            z-index: 1000;
+            transition: transform 0.3s;
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 80%;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 10px;
+            }
+
+            .input-container {
+                left: 0 !important;
+                padding: 10px;
+            }
+
+            .chat-container {
+                height: calc(100vh - 160px);
+                padding-bottom: 70px;
+            }
+
+            /* 汉堡菜单 */
+            .hamburger {
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                z-index: 1100;
+                background: #2c3e50;
+                color: white;
+                padding: 8px;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+        }
+
+        .history-item {
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #34495e;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .history-item:hover {
+            background: #3b5369;
+            transform: translateX(5px);
+        }
+
+        /* 调整主内容区位置 */
+        body {
+            margin-left: 270px !important;
+            max-width: calc(100% - 270px) !important;
+        }
+
+        /* 新增点击蒙层 */
+        .sidebar-mask {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        /* 修改侧边栏动画 */
+        .sidebar {
+            transform: translateX(-100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .sidebar.active {
+            transform: translateX(0);
+        }
+
+        /* 桌面端常驻侧边栏 */
+        @media (min-width: 769px) {
+            .sidebar {
+                transform: translateX(0);
+            }
+
+            .sidebar-mask {
+                display: none !important;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+
+<div class="sidebar" id="sidebar">
+    <div style="margin-bottom: 20px; font-size: 1.2em; font-weight: bold;">
+        历史会话
+        <!-- 已移除关闭按钮 -->
+    </div>
+    <div id="historyList"></div>
+</div>
+
+<!-- 主内容 -->
+<div class="main-content">
+    <div class="chat-container" id="chatContainer">
+        <div id="mtitle" style="text-align: center"><h3>新对话</h3></div>
+    </div>
+</div>
+<!-- 输入区 -->
+<div class="input-container">
+    <input type="text" id="input" placeholder="说点啥..."
+           style="flex:1; padding:10px; border:2px solid #007bff; border-radius:5px;">
+    <button onclick="sendMessage()" id="sendBtn"
+            style="padding:10px 20px; background:#007bff; color:white; border:none; border-radius:5px; cursor:pointer;">
+        发送
+    </button>
+</div>
+<!--<div id="loading">思考中...（你他妈急个屁）</div>-->
+
+<script>
+
+    // 窗口大小监听
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+            document.getElementById('sidebar').style.transform = 'translateX(0)';
+        }
+    });
+
+    const baseUrl = 'http://127.0.0.1:8081';
+
+    // 新增的历史记录处理函数
+    function loadHistory() {
+        fetch(baseUrl + '/listConversion', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        })
+            .then(response => response.json())
+            .then(data => {
+                const list = document.getElementById('historyList');
+                list.innerHTML = '';
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = "新建对话"
+                div.onclick = () => {
+                    window.location.reload();
+                };
+                list.appendChild(div);
+                data.data.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'history-item';
+                    div.innerHTML = `
+                    <div style="font-weight: bold;">${item.title}</div>
+                    <div style="font-size: 0.8em; color: #95a5a6;">${item.time} <span onclick="delConversion(${item.id})">删除</span></div>
+
+                `;
+                    div.onclick = () => {
+                        conversionId = item.id;
+                        list.childNodes.forEach(item => {
+                            item.style.background = '#34495e';
+                        })
+                        div.style.background = '#01153d';
+                        loadHistoryContent();
+                    };
+                    list.appendChild(div);
+                });
+            })
+            .catch(error => {
+                console.error('我操！获取历史记录失败:', error);
+            });
+    }
+
+    function delConversion(id) {
+        fetch(baseUrl + `/delConversion?cid=${id}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 200) {
+                    loadHistory();
+                    console.log(data)
+                    window.location.reload();
+                    conversionId = ""
+                } else {
+                    alert("删除失败");
+                }
+            })
+            .catch(error => {
+                console.error('我操！删除失败:', error);
+            })
+    }
+
+    function loadHistoryContent() {
+        fetch(baseUrl + `/getConversionContent?cid=${conversionId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        })
+            .then(response => response.json())
+            .then(data => {
+                chatContainer.innerHTML = ""
+                data.data.forEach(item => {
+                    if (item.role === "user") {
+                        createMessageElement(item.content, true);
+                    } else if (item.role === "assistant") {
+                        createMessageElement(item.content, false);
+                    } else if (item.role === "think") {
+                        createTMessageElement(item.content);
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('我操！获取历史记录失败:', error);
+            });
+    }
+
+    // 初始化时加载历史记录
+    loadHistory();
+
+    // 原来的sendMessage函数保持不变...
+    let msg = "";
+    let conversionId = "";
+
+    const chatContainer = document.getElementById('chatContainer');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('sendBtn');
+
+    function createMessageElement(text, isUser) {
+        const div = document.createElement('div');
+        div.className = isUser ? 'user-message' : 'bot-message';
+        if (isUser) {
+            div.innerText = text;
+        } else {
+            div.innerHTML = marked.parse(text)
+        }
+        chatContainer.appendChild(div);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function createTMessageElement(text) {
+        const div = document.createElement('div');
+        div.className = 'bot-Tmessage';
+        div.innerHTML = "<h4>思考过程</h4>" + marked.parse(text)
+        chatContainer.appendChild(div);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    let id = 111;
+
+    function sendMessage() {
+
+        if (sendBtn.innerText === "思考中") {
+            return;
+        }
+
+        // 在sendMessage函数开头加这个
+        if (window.innerWidth < 768) {
+            chatContainer.scrollIntoView({behavior: "smooth", block: "end"});
+        }
+        // 点击输入框自动缩小侧边栏
+        input.addEventListener('focus', () => {
+            if (window.innerWidth < 768) {
+                document.getElementById('sidebar').style.display = 'none';
+            }
+        });
+        const message = input.value.trim();
+        if (!message) return;
+
+        // 显示用户消息
+        createMessageElement(message, true);
+        input.value = '';
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = "思考中"
+        sendBtn.style.backgroundColor = "gray";
+        // document.getElementById('loading').style.display = 'block';
+
+        // 模拟SSE连接
+        const eventSource = new EventSource(`/chat?q=${encodeURIComponent(message)}` + `&conversionId=${conversionId}`);
+
+        let thinkingShown = true;
+        let responseContent = '';
+
+        eventSource.onmessage = (e) => {
+            if (e.data === '[DONE]') {
+                // document.getElementById('loading').style.display = 'none';
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = "发送"
+                sendBtn.style.backgroundColor = "#007bff";
+                document.getElementById(id).innerHTML = document.getElementById(id).innerHTML.replace("<h4>思考中</h4>", "<h4>思考过程</h4>");
+                return
+            }
+            const reasoningContent = JSON.parse(e.data).reasoningContent;
+            const content = JSON.parse(e.data).content;
+            if (reasoningContent !== "null" && reasoningContent !== undefined) {
+                if (thinkingShown) {
+                    const thinkingDiv = document.createElement('div');
+                    thinkingDiv.className = 'bot-Tmessage';
+                    thinkingDiv.innerHTML = `<div class="thinking" id=${id}><h4>思考中</h4>${reasoningContent}</div>`;
+                    chatContainer.appendChild(thinkingDiv);
+                    thinkingShown = false;
+                } else {
+                    document.getElementById(id).innerHTML += reasoningContent;
+                }
+            } else if (content !== "null" && content !== undefined) {
+                if (!thinkingShown) {
+                    const thinkingDiv = document.createElement('div');
+                    thinkingDiv.className = 'bot-message';
+                    thinkingDiv.id = "a" + id;
+                    thinkingDiv.innerHTML = content;
+                    chatContainer.appendChild(thinkingDiv);
+                    thinkingShown = true;
+                    msg = content
+                } else {
+                    msg += content
+                    // 使用marked库将Markdown转换为HTML
+                    var htmlContent = marked.parse(msg);
+                    // 将转换后的HTML内容设置到某个元素中，例如一个<div>
+                    document.getElementById("a" + id).innerHTML += content;
+                    document.getElementById("a" + id).innerHTML = htmlContent;
+                }
+            } else {
+                conversionId = JSON.parse(e.data).id
+            }
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        };
+
+        eventSource.onopen = () => {
+            id = id + 1;
+        };
+
+
+        eventSource.onerror = () => {
+            eventSource.close();
+            // document.getElementById('loading').style.display = 'none';
+            sendBtn.innerHTML = "发送"
+            sendBtn.style.backgroundColor = "#007bff";
+            sendBtn.disabled = false;
+            if (!thinkingShown) {
+                createMessageElement('操！服务器挂了，晚点再来！', false);
+            }
+        };
+    }
+
+    // 回车发送
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+</script>
+</body>
+</html>
